@@ -1,0 +1,18 @@
+[package]
+name = "stock-tax"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+yew = "0.19"
+gloo-file = "0.2"
+js-sys = "0.3"
+csv = "1.1"
+serde = { version = "1", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde", "wasmbind"] }
+
+[dependencies.web-sys]
+version = "0.3"
+features = ["File"]
