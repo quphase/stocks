@@ -110,6 +110,8 @@ impl Component for Model {
 
         html! {
                     <div>
+
+            <h1 class="text-3xl font-medium leading-tight mt-0 mb-2 text-blue-600">{"client-sided stock tax analyzer"}</h1>
                         <div class="flex mt-8">
             <div class="max-w-2xl rounded-lg  bg-white">
                 <div class="m-4">
