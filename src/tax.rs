@@ -11,6 +11,9 @@ pub enum Information {
     PriceDiff(f64),
     // Time passic between sell and latest buy
     TimeDiff(chrono::Duration),
+    // Total fee
+    Fees(f64),
+    // Remaining stocks left
     Remaing(f64),
     // A sell without a buy
     WeirdSell,
@@ -60,6 +63,8 @@ pub fn parse(trades: &Trades, symbol_filter: String) -> AllInfo {
 
                         let price_diff = (d.average_price - prev_d.average_price) * prev_d.quantity;
                         informations.push(Information::PriceDiff(price_diff));
+
+                        informations.push(Information::Fees(d.quantity * d.fees));
 
                         // All the sell quantity have been exhausted
                         if quantity >= 0.0 {

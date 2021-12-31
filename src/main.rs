@@ -98,6 +98,7 @@ impl Component for Model {
                     for d in data {
                         match d {
                             tax::Information::PriceDiff(a) => sum += a,
+                            tax::Information::Fees(f) => sum -= f,
                             _ => (),
                         };
                     }
@@ -155,7 +156,7 @@ impl Component for Model {
                         </div>
                         { information }
                         if let Some(info) = &self.tax_info {
-                            <div>{ for info.iter().map(|f| Self::view_tax(f)) }</div>
+                            <div class="flex flex-wrap">{ for info.iter().map(|f| Self::view_tax(f)) }</div>
                         }
                         { &self.err }
                     </div>
@@ -184,13 +185,11 @@ impl Model {
         };
 
         html! {
-            <div>
                 //<div> { format!("{:?}", buys_and_sells) } </div>
                 <div class={classes!("m-4", "w-96", "bg-gray-200","border-r-8", color_class)}>
                     <h2 class="text-2xl font-medium leading-tight"> {symbol}</h2>
                     {for information.iter().map(|f| Self::view_information(f))}
                 </div>
-            </div>
         }
     }
 
@@ -220,6 +219,10 @@ impl Model {
                         else {
                             <div class="w-64 bg-red-200 p-1 ml-24"> { format!("${}", (a*100.).round()/100.)} </div>
                         }
+                    },
+                tax::Information::Fees(f) =>
+                    html! {
+                        <div class="bg-red-100 w-64 p-1 ml-24"> { format!("-${} (fees)", f) } </div>
                     },
                 tax::Information::Remaing(q) =>
                     html! {

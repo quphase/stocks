@@ -10,7 +10,7 @@ pub struct Trade {
     pub date: chrono::DateTime<chrono::Utc>,
     pub order_type: String,
     pub side: String,
-    pub fees: f32,
+    pub fees: f64,
     pub quantity: f64,
     pub average_price: f64,
 }
