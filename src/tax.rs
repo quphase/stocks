@@ -89,9 +89,11 @@ pub fn parse(trades: &Trades, symbol_filter: String) -> AllInfo {
                 //let res = process().unwrap_or("Selling more than owned?\n".to_string());
             }
         }
-        if let Some(last) = stack.pop() {
-            informations.push(Information::Remaing(last.quantity));
+        let mut remaining = 0.;
+        while let Some(last) = stack.pop() {
+            remaining += last.quantity;
         }
+        informations.push(Information::Remaing(remaining));
         //informations.push(Information::Remaing(stack.len() as f64));
         result
             .entry(symbol.to_string())

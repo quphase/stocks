@@ -186,9 +186,11 @@ impl Model {
 
         html! {
                 //<div> { format!("{:?}", buys_and_sells) } </div>
-                <div class={classes!("m-4", "w-96", "bg-gray-200","border-r-8", color_class)}>
+                <div class="h-96 my-4 w-100 overflow-y-auto">
+                <div class={classes!("mx-4", "w-96", "bg-gray-200","border-r-8", color_class)}>
                     <h2 class="text-2xl font-medium leading-tight"> {symbol}</h2>
                     {for information.iter().map(|f| Self::view_information(f))}
+                </div>
                 </div>
         }
     }
