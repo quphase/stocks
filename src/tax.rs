@@ -7,8 +7,8 @@ pub enum Information {
     Buy(f64, f64, chrono::DateTime<chrono::Utc>),
     // Sell of certain quantity, price, and time, and how many buys are covered
     Sell(f64, f64, chrono::DateTime<chrono::Utc>),
-    // Profit between sell and latest buy
-    PriceDiff(f64),
+    // Profit between sell and latest buy, and when it was processed
+    PriceDiff(f64, chrono::DateTime<chrono::Utc>),
     // Time passic between sell and latest buy
     TimeDiff(chrono::Duration),
     // Total fee
@@ -21,7 +21,11 @@ pub enum Information {
 
 pub type AllInfo = HashMap<String, Vec<Information>>;
 
-pub fn parse(trades: &Trades, symbol_filter: String) -> AllInfo {
+pub fn parse(
+    trades: &Trades,
+    symbol_filter: String,
+    year: Option<chrono::DateTime<chrono::Utc>>,
+) -> AllInfo {
     let mut result = AllInfo::new();
     for (symbol, data) in trades {
         if !symbol.contains(&symbol_filter) {
@@ -40,18 +44,34 @@ pub fn parse(trades: &Trades, symbol_filter: String) -> AllInfo {
 
             // we have a buy, so push it to into the stack
             if side == "buy" {
-                informations.push(Information::Buy(
-                    d.quantity,
-                    d.average_price,
-                    d.date.clone(),
-                ));
+                if let Some(year) = year {
+                    if d.date >= year && d.date < year + chrono::Duration::days(365) {
+                        informations.push(Information::Buy(
+                            d.quantity,
+                            d.average_price,
+                            d.date.clone(),
+                        ));
+                    }
+                } else {
+                    informations.push(Information::Buy(
+                        d.quantity,
+                        d.average_price,
+                        d.date.clone(),
+                    ));
+                }
                 stack.push(d);
             } else {
                 // we have a sell
                 // keep poping from the stack until the quanity from the sell exhauts all the buy
                 // quantities
-                informations.push(Information::Sell(d.quantity, d.average_price, d.date));
-                let process = || -> Option<()> {
+                if let Some(year) = year {
+                    if d.date >= year && d.date < year + chrono::Duration::days(365) {
+                        informations.push(Information::Sell(d.quantity, d.average_price, d.date));
+                    }
+                } else {
+                    informations.push(Information::Sell(d.quantity, d.average_price, d.date));
+                }
+                let mut process = || -> Option<()> {
                     let mut prev_d = stack.pop()?;
                     let mut quantity = d.quantity;
 
@@ -59,12 +79,23 @@ pub fn parse(trades: &Trades, symbol_filter: String) -> AllInfo {
                         quantity = prev_d.quantity - quantity;
 
                         let time_diff = d.date - prev_d.date;
-                        informations.push(Information::TimeDiff(time_diff));
-
                         let price_diff = (d.average_price - prev_d.average_price) * prev_d.quantity;
-                        informations.push(Information::PriceDiff(price_diff));
 
-                        informations.push(Information::Fees(d.quantity * d.fees));
+                        let mut push = || {
+                            informations.push(Information::TimeDiff(time_diff));
+
+                            informations.push(Information::PriceDiff(price_diff, d.date));
+
+                            informations.push(Information::Fees(d.quantity * d.fees));
+                        };
+
+                        if let Some(year) = year {
+                            if d.date >= year && d.date < year + chrono::Duration::days(365) {
+                                push();
+                            }
+                        } else {
+                            push();
+                        }
 
                         // All the sell quantity have been exhausted
                         if quantity >= 0.0 {
@@ -77,13 +108,19 @@ pub fn parse(trades: &Trades, symbol_filter: String) -> AllInfo {
                     // leave the remaining amout of buys quantity in the stack
                     d.quantity = quantity;
                     if quantity > 0.0 {
-                        stack.push(d);
+                        stack.push(d.clone());
                     }
                     Some(())
                 };
 
                 if process().is_none() {
-                    informations.push(Information::WeirdSell);
+                    if let Some(year) = year {
+                        if d.date >= year && d.date < year + chrono::Duration::days(365) {
+                            informations.push(Information::WeirdSell);
+                        }
+                    } else {
+                        informations.push(Information::WeirdSell);
+                    }
                 }
 
                 //let res = process().unwrap_or("Selling more than owned?\n".to_string());
@@ -94,11 +131,14 @@ pub fn parse(trades: &Trades, symbol_filter: String) -> AllInfo {
             remaining += last.quantity;
         }
         informations.push(Information::Remaing(remaining));
-        //informations.push(Information::Remaing(stack.len() as f64));
-        result
-            .entry(symbol.to_string())
-            .or_insert(Vec::new())
-            .append(&mut informations);
+
+        // greater than 0 (1 since we push remaining value of stock always, even if 0-owned)
+        if informations.len() > 1 {
+            result
+                .entry(symbol.to_string())
+                .or_insert(Vec::new())
+                .append(&mut informations);
+        }
     }
     result
 }

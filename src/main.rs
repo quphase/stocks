@@ -10,11 +10,14 @@ use yew::{html, html::TargetCast, Component, Context, Html};
 use gloo_file::callbacks::FileReader;
 use gloo_file::File;
 
+use chrono::TimeZone;
+
 enum Msg {
     Loaded(String, String),
     File(File),
     Err(String),
     UpdateSymbolFilter(String),
+    UpdateYearFilter(String),
 }
 
 struct Model {
@@ -23,6 +26,7 @@ struct Model {
     reader: Option<FileReader>,
     err: String,
     csv_data: Option<csv_parser::Trades>,
+    year: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl Component for Model {
@@ -36,6 +40,7 @@ impl Component for Model {
             err: String::new(),
             reader: None,
             csv_data: None,
+            year: Some(chrono::Utc.ymd(2021, 1, 1).and_hms(0, 0, 0)), //year: None
         }
     }
 
@@ -45,7 +50,7 @@ impl Component for Model {
                 match csv_parser::parse(&data) {
                     Ok(trades) => {
                         self.csv_data = Some(trades.clone());
-                        let tax_info = tax::parse(&trades, self.symbol_filter.clone());
+                        let tax_info = tax::parse(&trades, self.symbol_filter.clone(), self.year);
                         self.tax_info = Some(tax_info);
                     }
                     Err(csv_err) => {
@@ -73,7 +78,21 @@ impl Component for Model {
             Msg::UpdateSymbolFilter(c) => {
                 self.symbol_filter = c.to_uppercase();
                 if let Some(trades) = &self.csv_data {
-                    let tax_info = tax::parse(&trades, self.symbol_filter.clone());
+                    let tax_info = tax::parse(&trades, self.symbol_filter.clone(), self.year);
+                    self.tax_info = Some(tax_info);
+                }
+                true
+            }
+            Msg::UpdateYearFilter(y) => {
+                if y == "none" {
+                    self.year = None;
+                } else {
+                    if let Some(year) = y.parse().ok() {
+                        self.year = Some(chrono::Utc.ymd(year, 1, 1).and_hms(0, 0, 0));
+                    }
+                }
+                if let Some(trades) = &self.csv_data {
+                    let tax_info = tax::parse(&trades, self.symbol_filter.clone(), self.year);
                     self.tax_info = Some(tax_info);
                 }
                 true
@@ -97,7 +116,7 @@ impl Component for Model {
                     let mut sum = 0.;
                     for d in data {
                         match d {
-                            tax::Information::PriceDiff(a) => sum += a,
+                            tax::Information::PriceDiff(a, d) => sum += a,
                             tax::Information::Fees(f) => sum -= f,
                             _ => (),
                         };
@@ -154,6 +173,20 @@ impl Component for Model {
                             }
                             )}/>
                         </div>
+                        <div class="m-4">
+                            <p class="mb-2 text-gray-500">{ "Filter by year" }</p>
+                            <select onchange={ctx.link().callback(move |e: Event| {
+                                let input: HtmlInputElement = e.target_unchecked_into();
+                                Msg::UpdateYearFilter(input.value())
+
+                            })}>
+                                <option selected=true value="none">{"None"}</option>
+                                <option value="2019">{"2019"}</option>
+                                <option value="2020">{"2020"}</option>
+                                <option value="2021">{"2021"}</option>
+                            </select>
+                        </div>
+
                         { information }
                         if let Some(info) = &self.tax_info {
                             <div class="flex flex-wrap">{ for info.iter().map(|f| Self::view_tax(f)) }</div>
@@ -171,7 +204,7 @@ impl Model {
         let mut sum = 0.;
         for info in information {
             match info {
-                tax::Information::PriceDiff(a) => sum += a,
+                tax::Information::PriceDiff(a, _d) => sum += a,
                 _ => (),
             }
         }
@@ -212,8 +245,7 @@ impl Model {
                     html! {
                         <div class="w-80 bg-indigo-200 p-1 ml-8"> { format!("{} days -- {}", d.num_days(), if d.num_days() < 365 { "short-term capital" } else { "long-term capital" }) } </div>
                     },
-
-                 tax::Information::PriceDiff(a) =>
+                 tax::Information::PriceDiff(a, _d) =>
                     html! {
                         if a > &0. {
                             <div class="w-64 bg-green-200 p-1 ml-24"> { format!("${}", (a*100.).round()/100.)} </div>
