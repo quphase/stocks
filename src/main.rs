@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use yew::prelude::*;
 
 pub mod csv_parser;
@@ -112,11 +111,11 @@ impl Component for Model {
         if let Some(info) = &self.tax_info {
             let earnings: f64 = info
                 .iter()
-                .map(|(s, data)| {
+                .map(|(_s, data)| {
                     let mut sum = 0.;
                     for d in data {
                         match d {
-                            tax::Information::PriceDiff(a, d) => sum += a,
+                            tax::Information::PriceDiff(a, _d) => sum += a,
                             tax::Information::Fees(f) => sum -= f,
                             _ => (),
                         };
@@ -124,76 +123,77 @@ impl Component for Model {
                     sum
                 })
                 .sum();
-            information =
-                html! { format!("Total capital earnings: {}", (earnings * 100.).round()/100.) };
+            information = html! {
+                <div>
+                    { format!("Total capital earnings: ${}", (earnings * 100.).round()/100.) }
+                </div>
+            };
         }
 
         html! {
-                    <div>
-
+        <div>
             <h1 class="text-3xl font-medium leading-tight mt-0 mb-2 text-blue-600">{"client-sided stock tax analyzer"}</h1>
-                        <div class="flex mt-8">
-            <div class="max-w-2xl rounded-lg  bg-white">
-                <div class="m-4">
-                    <label class="inline-block mb-2 text-gray-500">{"File Upload"}</label>
-                    <div class="flex items-center justify-center w-full">
-                        <label
-                            class="flex flex-col w-full h-32 border-4 border-blue-200 border-dashed hover:bg-gray-100 hover:border-gray-300">
-                            <div class="flex flex-col items-center justify-center pt-7">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-gray-400 group-hover:text-gray-600"
-                                    fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                </svg>
-                                <p class="pt-1 text-sm tracking-wider text-gray-400 group-hover:text-gray-600">
-                                {"Attach a file"}</p>
+            <div class="flex mt-8">
+                <div class="max-w-2xl rounded-lg  bg-white">
+                    <div class="m-4">
+                        <label class="inline-block mb-2 text-gray-500">{"File Upload"}</label>
+                            <div class="flex items-center justify-center w-full">
+                                <label
+                                    class="flex flex-col w-full h-32 border-4 border-blue-200 border-dashed hover:bg-gray-100 hover:border-gray-300">
+                                    <div class="flex flex-col items-center justify-center pt-7">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-gray-400 group-hover:text-gray-600"
+                                            fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                        </svg>
+                                        <p class="pt-1 text-sm tracking-wider text-gray-400 group-hover:text-gray-600">
+                                                {"Attach a file"}</p>
+                                    </div>
+                                    <input type="file" class="opacity-0" onchange={ctx.link().callback(move |e: Event| {
+                                        let input: HtmlInputElement = e.target_unchecked_into();
+                                        if let Some(files) = input.files() {
+                                            let file = files.get(0).unwrap();
+                                            let result = File::from(web_sys::File::from(file));
+                                            Msg::File(result)
+                                        }
+                                        else {
+                                            Msg::Err("Something went wrong with upload".to_string())
+                                        }
+                                    })}/>
+                                </label>
                             </div>
-                            <input type="file" class="opacity-0" onchange={ctx.link().callback(move |e: Event| {
-                                    let input: HtmlInputElement = e.target_unchecked_into();
-
-                                    if let Some(files) = input.files() {
-                                        let file = files.get(0).unwrap();
-                                        let result = File::from(web_sys::File::from(file));
-                                        Msg::File(result)
-                                    }
-                                    else {
-                                        Msg::Err("Something went wrong with upload".to_string())
-                                    }
-                                })}/>
-                        </label>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
-                        <div class="m-4">
-                            <p class="mb-2 text-gray-500">{ "Filter by stock ticker" }</p>
-                            <input class="bg-gray-40 border-2 border-blue-200 p-2" placeholder="GME" type="text" value={self.symbol_filter.clone()} oninput={ctx.link().callback(move |e: InputEvent| {
-                                let input: HtmlInputElement = e.target_unchecked_into();
-                                Msg::UpdateSymbolFilter(input.value())
-                            }
-                            )}/>
-                        </div>
-                        <div class="m-4">
-                            <p class="mb-2 text-gray-500">{ "Filter by year" }</p>
-                            <select onchange={ctx.link().callback(move |e: Event| {
-                                let input: HtmlInputElement = e.target_unchecked_into();
-                                Msg::UpdateYearFilter(input.value())
-
-                            })}>
-                                <option selected=true value="none">{"None"}</option>
-                                <option value="2019">{"2019"}</option>
-                                <option value="2020">{"2020"}</option>
-                                <option value="2021">{"2021"}</option>
-                            </select>
-                        </div>
-
-                        { information }
-                        if let Some(info) = &self.tax_info {
-                            <div class="flex flex-wrap">{ for info.iter().map(|f| Self::view_tax(f)) }</div>
+                <div class="m-4">
+                    <p class="mb-2 text-gray-500">{ "Filter by stock ticker" }</p>
+                    <input class="bg-gray-40 border-2 border-blue-200 p-2" placeholder="GME" type="text" value={self.symbol_filter.clone()} oninput={ctx.link().callback(move |e: InputEvent| {
+                            let input: HtmlInputElement = e.target_unchecked_into();
+                            Msg::UpdateSymbolFilter(input.value())
                         }
-                        { &self.err }
-                    </div>
+                    )}/>
+                </div>
+                <div class="m-4">
+                    <p class="mb-2 text-gray-500">{ "Filter by year" }</p>
+                    <select onchange={ctx.link().callback(move |e: Event| {
+                        let input: HtmlInputElement = e.target_unchecked_into();
+                        Msg::UpdateYearFilter(input.value())
+
+                    })}>
+                        <option selected=true value="none">{"None"}</option>
+                        <option value="2019">{"2019"}</option>
+                        <option value="2020">{"2020"}</option>
+                        <option value="2021">{"2021"}</option>
+                    </select>
+                </div>
+
+                { information }
+                if let Some(info) = &self.tax_info {
+                    <div class="flex flex-wrap">{ for info.iter().map(|f| Self::view_tax(f)) }</div>
                 }
+                { &self.err }
+            </div>
+        }
     }
 }
 
@@ -219,11 +219,19 @@ impl Model {
 
         html! {
                 //<div> { format!("{:?}", buys_and_sells) } </div>
-                <div class="h-96 my-4 w-100 overflow-y-auto">
-                <div class={classes!("mx-4", "w-96", "bg-gray-200","border-r-8", color_class)}>
+                <div class="my-4 mx-4">
                     <h2 class="text-2xl font-medium leading-tight"> {symbol}</h2>
-                    {for information.iter().map(|f| Self::view_information(f))}
-                </div>
+                    <div class={classes!("bg-gray-200","border-l-8", color_class, "h-96", "overflow-y-auto", "overflow-x-hidden")}>
+                        {for information.iter().map(|f| Self::view_information(f))}
+
+                    </div>
+                    if let Some(tax::Information::Remaing(q)) = information.last() {
+                        <div>
+                            <hr/>
+                            <div class="w-fill bg-black text-white"> { format!("Quantity Owned: {}", q) } </div>
+                        </div>
+                    }
+
                 </div>
         }
     }
@@ -233,11 +241,11 @@ impl Model {
             <div class="w-96">
             {
             match data {
-                tax::Information::Buy(q, p, d) =>
+                tax::Information::Buy(q, _p, _d) =>
                     html! {
                         <div class="bg-blue-400 rounded-md p-1 m-2"> { format!("Buy: {}", q) } </div>
                     },
-                tax::Information::Sell(q, p, d) =>
+                tax::Information::Sell(q, _p, _d) =>
                     html! {
                         <div class="bg-indigo-400 rounded p-1 mt-2 mr-2 ml-2"> { format!("Sell: {}", q) } </div>
                     },
@@ -257,13 +265,6 @@ impl Model {
                 tax::Information::Fees(f) =>
                     html! {
                         <div class="bg-red-100 w-64 p-1 ml-24"> { format!("-${} (fees)", f) } </div>
-                    },
-                tax::Information::Remaing(q) =>
-                    html! {
-                        <div>
-                            <hr/>
-                            <div class="w-96 bg-black text-white"> { format!("Quantity Owned: {}", q) } </div>
-                        </div>
                     },
 
 
