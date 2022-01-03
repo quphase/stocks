@@ -131,6 +131,8 @@ impl Component for Model {
         }
 
         html! {
+            <>
+                <main class="flex-grow">
         <div>
             <h1 class="text-3xl font-medium leading-tight mt-0 mb-2 text-blue-600">{"client-sided stock tax analyzer"}</h1>
             <div class="flex mt-8">
@@ -193,6 +195,19 @@ impl Component for Model {
                 }
                 { &self.err }
             </div>
+            </main>
+            <footer class="bg-gray-100 text-center lg:text-left">
+                <div class="text-center text-gray-700 p-4" style="background-color: rgba(0, 0, 0, 0.2);">
+                    {"Built by "}
+                    <a class="text-gray-800" href="https://quphase.com/">{"Quphase"}</a>
+                    {". Powered by "}
+                    <a class="text-gray-800" href="https://yew.rs/">{"Yew"}</a>
+                    {". Open source on "}
+                    <a class="text-gray-800" href="https://github.com/quphase/stocks">{"Github"}</a>
+                    {"."}
+                </div>
+            </footer>
+        </>
         }
     }
 }
