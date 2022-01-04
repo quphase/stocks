@@ -41,7 +41,7 @@ impl Component for Model {
             reader: None,
             symbol_filter: String::new(),
             err: String::new(),
-            year: Some(chrono::Utc.ymd(2021, 1, 1).and_hms(0, 0, 0)), //year: None
+            year: None,
         }
     }
 
@@ -219,6 +219,7 @@ impl Component for Model {
                         <option value="2019">{"2019"}</option>
                         <option value="2020">{"2020"}</option>
                         <option value="2021">{"2021"}</option>
+                        <option value="2022">{"2022"}</option>
                     </select>
                 </div>
 
