@@ -6,6 +6,7 @@ pub enum Information {
     SellToOpen(f64),
     BuyToClose(f64),
     SellToClose(f64),
+    TotalDiff(f64),
 }
 
 pub type AllOptionInfo = HashMap<String, Vec<Information>>;
@@ -31,21 +32,51 @@ pub fn parse(
         for mut d in &data {
             if let Some(opening_strategy) = &d.opening_strategy {
                 stack.push(d);
-                if d.side == "buy" {
-                    informations.push(Information::BuyToOpen(-d.price * 100.));
+
+                let mut print = || {
+                    if d.side == "buy" {
+                        informations.push(Information::BuyToOpen(-d.price * 100.));
+                    } else {
+                        informations.push(Information::SellToOpen(d.price * 100.));
+                    }
+                };
+                if let Some(year) = year {
+                    if d.order_created_at > year {
+                        print();
+                    }
                 } else {
-                    informations.push(Information::SellToOpen(d.price * 100.));
+                    print();
                 }
             }
             if let Some(closing_strategy) = &d.closing_strategy {
                 stack.pop();
-                if d.side == "buy" {
-                    informations.push(Information::BuyToClose(-d.price * 100.));
+                let mut print = || {
+                    if d.side == "buy" {
+                        informations.push(Information::BuyToClose(-d.price * 100.));
+                    } else {
+                        informations.push(Information::SellToClose(d.price * 100.));
+                    }
+                };
+                if let Some(year) = year {
+                    if d.order_created_at > year {
+                        print();
+                    }
                 } else {
-                    informations.push(Information::SellToClose(d.price * 100.));
+                    print();
                 }
             }
         }
+        let mut total_diff = 0.;
+        for info in &informations {
+            match info {
+                Information::BuyToOpen(p)
+                | Information::SellToOpen(p)
+                | Information::BuyToClose(p)
+                | Information::SellToClose(p) => total_diff += p,
+                _ => {}
+            }
+        }
+        informations.push(Information::TotalDiff(total_diff));
         if informations.len() > 0 {
             result
                 .entry(symbol.to_string())

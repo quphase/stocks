@@ -96,7 +96,6 @@ impl Component for Model {
                             let option_tax_info =
                                 option_tax::parse(&trades, self.symbol_filter.clone(), self.year);
                             self.option_tax_info = Some(option_tax_info);
-                            self.err = format!("done");
                         }
                         Err(csv_err) => {
                             self.err = format!("{:?}", csv_err);
@@ -176,9 +175,9 @@ impl Component for Model {
         // This gives us a component's "`Scope`" which allows us to send messages, etc to the component.
         //let link = ctx.link();
 
-        let mut information = html! {};
+        let mut earnings = 0.;
         if let Some(info) = &self.stock_tax_info {
-            let mut earnings: f64 = info
+            earnings += info
                 .iter()
                 .map(|(_s, data)| {
                     let mut sum = 0.;
@@ -191,30 +190,44 @@ impl Component for Model {
                     }
                     sum
                 })
-                .sum();
-
-            if let Some(info) = &self.crypto_tax_info {
-                earnings += info
-                    .iter()
-                    .map(|(_s, data)| {
-                        let mut sum = 0.;
-                        for d in data {
-                            match d {
-                                tax::Information::PriceDiff(a, _d) => sum += a,
-                                tax::Information::Fees(f) => sum -= f,
-                                _ => (),
-                            };
-                        }
-                        sum
-                    })
-                    .sum::<f64>();
-            }
-            information = html! {
-                <div class="dark:text-white">
-                    { format!("Total capital earnings: ${}", (earnings * 100.).round()/100.) }
-                </div>
-            };
+                .sum::<f64>();
         }
+
+        if let Some(info) = &self.crypto_tax_info {
+            earnings += info
+                .iter()
+                .map(|(_s, data)| {
+                    let mut sum = 0.;
+                    for d in data {
+                        match d {
+                            tax::Information::PriceDiff(a, _d) => sum += a,
+                            tax::Information::Fees(f) => sum -= f,
+                            _ => (),
+                        };
+                    }
+                    sum
+                })
+                .sum::<f64>();
+        }
+        if let Some(info) = &self.option_tax_info {
+            for (_, data) in info {
+                for i in data {
+                    match i {
+                        option_tax::Information::TotalDiff(a) => earnings += a,
+                        _ => {}
+                    }
+                }
+            }
+        }
+        let information = if earnings != 0. {
+            html! {
+            <div class="dark:text-white">
+                { format!("Total capital earnings: ${}", (earnings * 100.).round()/100.) }
+            </div>
+            }
+        } else {
+            html! {}
+        };
 
         html! {
             <>
@@ -345,7 +358,6 @@ impl Component for Model {
                     <div class="flex flex-wrap">{ for info.iter().map(|f| Self::view_tax(f)) }</div>
                 }
                 if let Some(info) = &self.option_tax_info {
-                    <h1>{"test"}</h1>
                     <div class="flex flex-wrap">{ for info.iter().map(|f| Self::view_option_tax(f)) }</div>
                 }
                 { &self.err }
@@ -442,15 +454,16 @@ impl Model {
         }
     }
     fn view_option_tax(data: (&String, &Vec<option_tax::Information>)) -> Html {
+        use option_tax::Information;
         let (symbol, information) = data;
 
         let mut sum = 0.;
-        //for info in information {
-        //    match info {
-        //        tax::Information::PriceDiff(a, _d) => sum += a,
-        //        _ => (),
-        //    }
-        //}
+        for info in information {
+            match info {
+                &Information::TotalDiff(a) => sum = a,
+                _ => (),
+            }
+        }
 
         let color_class = if sum > 0. {
             "border-green-700"
@@ -468,9 +481,9 @@ impl Model {
                         {for information.iter().map(|f| Self::view_option_information(f))}
 
                     </div>
-                    //if let Some(tax::Information::Remaing(q)) = information.last() {
-                    //        <div class="w-fill bg-black text-white"> { format!("Quantity Owned: {}", q) } </div>
-                    //}
+                    if let Some(option_tax::Information::TotalDiff(q)) = information.last() {
+                            <div class="w-fill bg-black text-white"> { format!("Total Gains: ${}", q) } </div>
+                    }
 
                 </div>
         }
