@@ -1,6 +1,7 @@
 use yew::prelude::*;
 
 pub mod csv_parser;
+mod option_tax;
 mod tax;
 
 use web_sys::{Event, HtmlInputElement};
@@ -11,9 +12,15 @@ use gloo_file::File;
 
 use chrono::TimeZone;
 
+enum Investment {
+    Stock,
+    Crypto,
+    Options,
+}
+
 enum Msg {
-    Loaded(String, String),
-    File(File),
+    Loaded(String, String, Investment),
+    File(File, Investment),
     Err(String),
     UpdateSymbolFilter(String),
     UpdateYearFilter(String),
@@ -22,6 +29,12 @@ enum Msg {
 struct Model {
     stock_tax_info: Option<tax::AllInfo>,
     stock_csv_data: Option<csv_parser::Trades>,
+
+    crypto_tax_info: Option<tax::AllInfo>,
+    crypto_csv_data: Option<csv_parser::Trades>,
+
+    option_tax_info: Option<option_tax::AllOptionInfo>,
+    option_csv_data: Option<csv_parser::OptionTrades>,
 
     reader: Option<FileReader>,
     symbol_filter: String,
@@ -38,6 +51,12 @@ impl Component for Model {
             stock_tax_info: None,
             stock_csv_data: None,
 
+            crypto_tax_info: None,
+            crypto_csv_data: None,
+
+            option_tax_info: None,
+            option_csv_data: None,
+
             reader: None,
             symbol_filter: String::new(),
             err: String::new(),
@@ -47,22 +66,47 @@ impl Component for Model {
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            Msg::Loaded(_fname, data) => {
-                match csv_parser::parse(&data) {
-                    Ok(trades) => {
-                        self.stock_csv_data = Some(trades.clone());
-                        let stock_tax_info =
-                            tax::parse(&trades, self.symbol_filter.clone(), self.year);
-                        self.stock_tax_info = Some(stock_tax_info);
-                    }
-                    Err(csv_err) => {
-                        self.err = format!("{:?}", csv_err);
-                    }
-                };
+            Msg::Loaded(_fname, data, investment) => {
+                match investment {
+                    Investment::Stock => match csv_parser::parse(&data) {
+                        Ok(trades) => {
+                            self.stock_csv_data = Some(trades.clone());
+                            let stock_tax_info =
+                                tax::parse(&trades, self.symbol_filter.clone(), self.year);
+                            self.stock_tax_info = Some(stock_tax_info);
+                        }
+                        Err(csv_err) => {
+                            self.err = format!("{:?}", csv_err);
+                        }
+                    },
+                    Investment::Crypto => match csv_parser::parse(&data) {
+                        Ok(trades) => {
+                            self.crypto_csv_data = Some(trades.clone());
+                            let crypto_tax_info =
+                                tax::parse(&trades, self.symbol_filter.clone(), self.year);
+                            self.crypto_tax_info = Some(crypto_tax_info);
+                        }
+                        Err(csv_err) => {
+                            self.err = format!("{:?}", csv_err);
+                        }
+                    },
+                    Investment::Options => match csv_parser::parse_options(&data) {
+                        Ok(trades) => {
+                            self.option_csv_data = Some(trades.clone());
+                            let option_tax_info =
+                                option_tax::parse(&trades, self.symbol_filter.clone(), self.year);
+                            self.option_tax_info = Some(option_tax_info);
+                            self.err = format!("done");
+                        }
+                        Err(csv_err) => {
+                            self.err = format!("{:?}", csv_err);
+                        }
+                    },
+                }
                 self.reader = None;
                 true
             }
-            Msg::File(file) => {
+            Msg::File(file, investment) => {
                 let file_name = file.name();
                 let task = {
                     let file_name = file_name.clone();
@@ -71,6 +115,7 @@ impl Component for Model {
                         link.send_message(Msg::Loaded(
                             file_name,
                             res.unwrap_or_else(|e| e.to_string()),
+                            investment,
                         ))
                     })
                 };
@@ -83,6 +128,17 @@ impl Component for Model {
                     let stock_tax_info = tax::parse(&trades, self.symbol_filter.clone(), self.year);
                     self.stock_tax_info = Some(stock_tax_info);
                 }
+                if let Some(trades) = &self.crypto_csv_data {
+                    let crypto_tax_info =
+                        tax::parse(&trades, self.symbol_filter.clone(), self.year);
+                    self.crypto_tax_info = Some(crypto_tax_info);
+                }
+                if let Some(trades) = &self.option_csv_data {
+                    let option_tax_info =
+                        option_tax::parse(&trades, self.symbol_filter.clone(), self.year);
+                    self.option_tax_info = Some(option_tax_info);
+                }
+
                 true
             }
             Msg::UpdateYearFilter(y) => {
@@ -96,6 +152,16 @@ impl Component for Model {
                 if let Some(trades) = &self.stock_csv_data {
                     let stock_tax_info = tax::parse(&trades, self.symbol_filter.clone(), self.year);
                     self.stock_tax_info = Some(stock_tax_info);
+                }
+                if let Some(trades) = &self.crypto_csv_data {
+                    let crypto_tax_info =
+                        tax::parse(&trades, self.symbol_filter.clone(), self.year);
+                    self.crypto_tax_info = Some(crypto_tax_info);
+                }
+                if let Some(trades) = &self.option_csv_data {
+                    let option_tax_info =
+                        option_tax::parse(&trades, self.symbol_filter.clone(), self.year);
+                    self.option_tax_info = Some(option_tax_info);
                 }
                 true
             }
@@ -112,7 +178,7 @@ impl Component for Model {
 
         let mut information = html! {};
         if let Some(info) = &self.stock_tax_info {
-            let earnings: f64 = info
+            let mut earnings: f64 = info
                 .iter()
                 .map(|(_s, data)| {
                     let mut sum = 0.;
@@ -126,6 +192,23 @@ impl Component for Model {
                     sum
                 })
                 .sum();
+
+            if let Some(info) = &self.crypto_tax_info {
+                earnings += info
+                    .iter()
+                    .map(|(_s, data)| {
+                        let mut sum = 0.;
+                        for d in data {
+                            match d {
+                                tax::Information::PriceDiff(a, _d) => sum += a,
+                                tax::Information::Fees(f) => sum -= f,
+                                _ => (),
+                            };
+                        }
+                        sum
+                    })
+                    .sum::<f64>();
+            }
             information = html! {
                 <div class="dark:text-white">
                     { format!("Total capital earnings: ${}", (earnings * 100.).round()/100.) }
@@ -138,7 +221,7 @@ impl Component for Model {
                 <main class="flex-grow">
         <div>
             <h1 class="text-3xl font-medium leading-tight mt-0 mb-2 text-blue-600 dark:text-white">{"client-sided stock tax analyzer"}</h1>
-            <div class="flex mt-8">
+            <div class="flex flex-wrap mt-8">
                 <div class="max-w-2xl rounded-lg  bg-white dark:bg-gray-900">
                     <div class="m-4">
                         <label class="inline-block mb-2 text-gray-500 dark:text-gray-100">{"Upload Stock History"}</label>
@@ -159,7 +242,7 @@ impl Component for Model {
                                         if let Some(files) = input.files() {
                                             let file = files.get(0).unwrap();
                                             let result = File::from(web_sys::File::from(file));
-                                            Msg::File(result)
+                                            Msg::File(result, Investment::Stock)
                                         }
                                         else {
                                             Msg::Err("Something went wrong with upload".to_string())
@@ -189,7 +272,7 @@ impl Component for Model {
                                         if let Some(files) = input.files() {
                                             let file = files.get(0).unwrap();
                                             let result = File::from(web_sys::File::from(file));
-                                            Msg::File(result)
+                                            Msg::File(result, Investment::Crypto)
                                         }
                                         else {
                                             Msg::Err("Something went wrong with upload".to_string())
@@ -199,6 +282,37 @@ impl Component for Model {
                             </div>
                         </div>
                     </div>
+                    <div class="max-w-2xl rounded-lg  bg-white dark:bg-gray-900">
+                    <div class="m-4">
+                        <label class="inline-block mb-2 text-gray-500 dark:text-gray-100">{"Upload Option History"}</label>
+                            <div class="flex items-center justify-center w-full">
+                                <label
+                                    class="flex flex-col w-full h-32 border-4 border-blue-200 dark:border-blue-800 border-dashed hover:bg-gray-100 hover:border-gray-300 dark:hover:bg-gray-800">
+                                    <div class="flex flex-col items-center justify-center pt-7">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-gray-400 dark:text-gray-100 group-hover:text-gray-600"
+                                            fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                        </svg>
+                                        <p class="pt-1 text-sm tracking-wider text-gray-400 dark:text-gray-100 group-hover:text-gray-600">
+                                                {"Attach a file"}</p>
+                                    </div>
+                                    <input type="file" class="opacity-0" onchange={ctx.link().callback(move |e: Event| {
+                                        let input: HtmlInputElement = e.target_unchecked_into();
+                                        if let Some(files) = input.files() {
+                                            let file = files.get(0).unwrap();
+                                            let result = File::from(web_sys::File::from(file));
+                                            Msg::File(result, Investment::Options)
+                                        }
+                                        else {
+                                            Msg::Err("Something went wrong with upload".to_string())
+                                        }
+                                    })}/>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
                 <div class="m-4">
                     <p class="mb-2 text-gray-500 dark:text-gray-100">{ "Filter by stock ticker" }</p>
@@ -226,6 +340,13 @@ impl Component for Model {
                 { information }
                 if let Some(info) = &self.stock_tax_info {
                     <div class="flex flex-wrap">{ for info.iter().map(|f| Self::view_tax(f)) }</div>
+                }
+                if let Some(info) = &self.crypto_tax_info {
+                    <div class="flex flex-wrap">{ for info.iter().map(|f| Self::view_tax(f)) }</div>
+                }
+                if let Some(info) = &self.option_tax_info {
+                    <h1>{"test"}</h1>
+                    <div class="flex flex-wrap">{ for info.iter().map(|f| Self::view_option_tax(f)) }</div>
                 }
                 { &self.err }
             </div>
@@ -311,6 +432,82 @@ impl Model {
                 tax::Information::Fees(f) =>
                     html! {
                         <div class="bg-red-100 dark:bg-red-500 dark:text-white w-64 p-1 ml-24"> { format!("-${} (fees)", f) } </div>
+                    },
+
+
+                _ => html! {}
+            }
+            }
+            </div>
+        }
+    }
+    fn view_option_tax(data: (&String, &Vec<option_tax::Information>)) -> Html {
+        let (symbol, information) = data;
+
+        let mut sum = 0.;
+        //for info in information {
+        //    match info {
+        //        tax::Information::PriceDiff(a, _d) => sum += a,
+        //        _ => (),
+        //    }
+        //}
+
+        let color_class = if sum > 0. {
+            "border-green-700"
+        } else if sum == 0.0 {
+            "border-gray-700"
+        } else {
+            "border-red-700"
+        };
+
+        html! {
+                //<div> { format!("{:?}", buys_and_sells) } </div>
+                <div class="my-4 mx-4">
+                    <h2 class="text-black dark:text-gray-200 text-2xl font-medium leading-tight"> {symbol}</h2>
+                    <div class={classes!("bg-gray-200","dark:bg-gray-800", "border-l-8", color_class, "h-96", "overflow-y-auto", "overflow-x-hidden")}>
+                        {for information.iter().map(|f| Self::view_option_information(f))}
+
+                    </div>
+                    //if let Some(tax::Information::Remaing(q)) = information.last() {
+                    //        <div class="w-fill bg-black text-white"> { format!("Quantity Owned: {}", q) } </div>
+                    //}
+
+                </div>
+        }
+    }
+
+    fn view_option_information(data: &option_tax::Information) -> Html {
+        html! {
+            <div class="w-96">
+            {
+            match data {
+                option_tax::Information::BuyToOpen(p) =>
+                    html! {
+                        <>
+                        <div class="bg-blue-400 dark:bg-blue-800 dark:text-white rounded-md p-1 mx-2"> { format!("Buy to Open") } </div>
+                        <div class="w-64 bg-red-200 dark:bg-red-600 dark:text-white p-1 ml-24"> { format!("${}", (p*100.).round()/100.)} </div>
+                        </>
+                    },
+                option_tax::Information::BuyToClose(p) =>
+                    html! {
+                        <>
+                        <div class="bg-blue-400 dark:bg-blue-800 dark:text-white rounded-md p-1 mx-2"> { format!("Buy to Close") } </div>
+                        <div class="w-64 bg-red-200 dark:bg-red-600 dark:text-white p-1 ml-24"> { format!("${}", (p*100.).round()/100.)} </div>
+                        </>
+                    },
+                option_tax::Information::SellToOpen(p) =>
+                    html! {
+                        <>
+                        <div class="bg-indigo-400 dark:bg-indigo-800 dark:text-white rounded p-1 mt-2 mr-2 ml-2"> { format!("Sell to Open") } </div>
+                        <div class="w-64 bg-green-200 dark:bg-green-600 dark:text-white p-1 ml-24"> { format!("${}", (p*100.).round()/100.)} </div>
+                        </>
+                    },
+                option_tax::Information::SellToClose(p) =>
+                    html! {
+                        <>
+                        <div class="bg-indigo-400 dark:bg-indigo-800 dark:text-white rounded p-1 mt-2 mr-2 ml-2"> { format!("Sell to Close") } </div>
+                        <div class="w-64 bg-green-200 dark:bg-green-600 dark:text-white p-1 ml-24"> { format!("${}", (p*100.).round()/100.)} </div>
+                        </>
                     },
 
 
