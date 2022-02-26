@@ -176,6 +176,7 @@ impl Component for Model {
         //let link = ctx.link();
 
         let mut earnings = 0.;
+        let mut short_term_trades = 0;
         if let Some(info) = &self.stock_tax_info {
             earnings += info
                 .iter()
@@ -184,6 +185,11 @@ impl Component for Model {
                     for d in data {
                         match d {
                             tax::Information::PriceDiff(a, _d) => sum += a,
+                            tax::Information::TimeDiff(d) => {
+                                if d.num_days() < 365 {
+                                    short_term_trades += 1;
+                                }
+                            }
                             tax::Information::Fees(f) => sum -= f,
                             _ => (),
                         };
@@ -221,9 +227,31 @@ impl Component for Model {
         }
         let information = if earnings != 0. {
             html! {
-            <div class="dark:text-white">
-                { format!("Total capital earnings: ${}", (earnings * 100.).round()/100.) }
-            </div>
+                <>
+                <div class="dark:text-white">
+                    {
+                        format!("Total capital earnings: ${}", (earnings * 100.).round()/100.)
+                    }
+                </div>
+               <div class="dark:text-white">
+                {
+                    format!("Total short trades: {}", short_term_trades)
+                }
+                </div>
+                <div class="dark:text-white">
+                    {"Table of Contents"}
+                    if self.stock_tax_info.is_some() {
+                        <a class="block underline" href="#stocks">{"Stocks"}</a>
+                    }
+                    if self.crypto_tax_info.is_some() {
+                        <a class="block underline" href="#crypto">{"Cryptocurrency"}</a>
+                    }
+                    if self.option_tax_info.is_some() {
+                        <a class="block underline" href="#options">{"Options"}</a>
+                    }
+                </div>
+
+                </>
             }
         } else {
             html! {}
@@ -231,10 +259,11 @@ impl Component for Model {
 
         html! {
             <>
-                <main class="flex-grow">
+                <main class="flex-grow mx-auto">
         <div>
+            <div class="text-center">
             <h1 class="text-3xl font-medium leading-tight mt-0 mb-2 text-blue-600 dark:text-white">{"client-sided stock tax analyzer"}</h1>
-            <div class="flex flex-wrap mt-8">
+            <div class="inline-flex flex-wrap mt-8">
                 <div class="max-w-2xl rounded-lg  bg-white dark:bg-gray-900">
                     <div class="m-4">
                         <label class="inline-block mb-2 text-gray-500 dark:text-gray-100">{"Upload Stock History"}</label>
@@ -349,17 +378,29 @@ impl Component for Model {
                         <option value="2022">{"2022"}</option>
                     </select>
                 </div>
+                </div>
 
-                { information }
-                if let Some(info) = &self.stock_tax_info {
-                    <div class="flex flex-wrap">{ for info.iter().map(|f| Self::view_tax(f)) }</div>
-                }
-                if let Some(info) = &self.crypto_tax_info {
-                    <div class="flex flex-wrap">{ for info.iter().map(|f| Self::view_tax(f)) }</div>
-                }
-                if let Some(info) = &self.option_tax_info {
-                    <div class="flex flex-wrap">{ for info.iter().map(|f| Self::view_option_tax(f)) }</div>
-                }
+                <div class="w-4/5 mx-auto">
+                    { information }
+                    if let Some(info) = &self.stock_tax_info {
+                        <>
+                            <h2 class="text-black dark:text-gray-200 text-3xl font-medium leading-tight" id="stocks">{"Stocks"}</h2>
+                            <div class="flex items-start flex-wrap gap-4 justify-center">{ for info.iter().map(|f| Self::view_tax(f)) }</div>
+                        </>
+                    }
+                    if let Some(info) = &self.crypto_tax_info {
+                        <>
+                            <h2 class="text-black dark:text-gray-200 text-3xl font-medium leading-tight" id="crypto">{"Cryptocurrency"}</h2>
+                            <div class="flex items-start flex-wrap gap-4 justify-center">{ for info.iter().map(|f| Self::view_tax(f)) }</div>
+                        </>
+                    }
+                    if let Some(info) = &self.option_tax_info {
+                        <>
+                            <h2 class="text-black dark:text-gray-200 text-3xl font-medium leading-tight" id="options">{"Options"}</h2>
+                            <div class="flex items-start flex-wrap gap-4 justify-center">{ for info.iter().map(|f| Self::view_option_tax(f)) }</div>
+                        </>
+                    }
+                </div>
                 { &self.err }
             </div>
             </main>
@@ -401,7 +442,7 @@ impl Model {
 
         html! {
                 //<div> { format!("{:?}", buys_and_sells) } </div>
-                <div class="my-4 mx-4">
+                <div class="">
                     <h2 class="text-black dark:text-gray-200 text-2xl font-medium leading-tight"> {symbol}</h2>
                     <div class={classes!("bg-gray-200","dark:bg-gray-800", "border-l-8", color_class, "h-96", "overflow-y-auto", "overflow-x-hidden")}>
                         {for information.iter().map(|f| Self::view_information(f))}

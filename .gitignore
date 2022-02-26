@@ -1,2 +1,6 @@
 /target
 /dist
+**.env
+orders-stock.csv
+orders-option.csv
+orders-crypto.csv
